@@ -1,0 +1,16 @@
+# Direct dependencies — sinovdan o'tgan aniq versiyalar (reproducible build).
+# Yangilashda: pip install -U <paket>, so'ng shu fayldagi versiyani yangilang va testlarni qayta ishga tushiring.
+aiogram==3.31.0
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
+aiosqlite==0.22.1
+pydantic==2.13.5
+pydantic-settings==2.15.0
+bcrypt==5.0.0
+python-multipart==0.0.32
+pytz==2026.5
+APScheduler==3.11.3
+Jinja2==3.1.6
+pytest==9.1.1
+pytest-asyncio==1.4.0
+httpx==0.28.1

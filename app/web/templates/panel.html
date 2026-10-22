@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Klinika — Boshqaruv paneli</title>
+    <script src="/static/js/telegram-web-app.js?v=1"></script>
+    <script src="/static/js/auth.js?v=3"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v=3">
+</head>
+<body>
+    <div class="container">
+        <div class="card" style="max-width: 440px; margin: 40px auto; text-align: center;">
+            <h2 class="card-title" style="justify-content: center;">🏥 Boshqaruv paneli</h2>
+            <p id="panelMessage" style="color: var(--gray-muted); margin-top: 10px;">
+                Rolingiz aniqlanmoqda. Iltimos kuting...
+            </p>
+            <div id="panelLinks" style="display: none; margin-top: 16px; flex-direction: column; gap: 8px;">
+                <a class="btn btn-primary" href="/admin">👑 Super Admin</a>
+                <a class="btn btn-outline" href="/reception">🏢 Reception</a>
+                <a class="btn btn-outline" href="/doctor">👨‍⚕️ Shifokor kabineti</a>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function () {
+            "use strict";
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (tg) tg.expand();
+            // telegram-web-app.js yuklanmasa ham initData ni URL hash'dan olamiz
+            const initData = (typeof window.getInitData === "function")
+                ? window.getInitData()
+                : ((tg && tg.initData) ? tg.initData : "");
+            const msg = document.getElementById("panelMessage");
+            const links = document.getElementById("panelLinks");
+
+            function showLinks(text) {
+                msg.innerText = text;
+                // Havolalarga joriy hash'ni qo'shamiz — shunda Telegram initData
+                // keyingi sahifaga ham yetib boradi (aks holda "Panelni Telegram
+                // orqali oching" degan xabar chiqadi).
+                const hash = window.location.hash || "";
+                if (hash) {
+                    links.querySelectorAll("a").forEach((a) => {
+                        const raw = a.getAttribute("href") || "";
+                        if (raw && raw.indexOf("#") === -1) a.setAttribute("href", raw + hash);
+                    });
+                }
+                links.style.display = "flex";
+            }
+
+            async function route() {
+                // Telegram tashqarisida (brauzerda) ochilgan bo'lsa — tanlash havolalarini ko'rsatamiz
+                if (!initData) {
+                    showLinks("Panelni Telegram ilovasi orqali oching. Brauzerda esa quyidagilardan foydalanishingiz mumkin:");
+                    return;
+                }
+                try {
+                    const res = await fetch("/api/auth/me", {
+                        headers: {"X-Telegram-Init-Data": initData}
+                    });
+                    const me = await res.json();
+                    if (!me || !me.authenticated) {
+                        showLinks("Sizga boshqaruv paneli biriktirilmagan yoki huquqingiz bekor qilingan.");
+                        return;
+                    }
+                    // Rolga qarab mos panelga yo'naltirish
+                    if (me.role === "DOCTOR") {
+                        window.location.replace("/doctor" + window.location.hash);
+                    } else if (me.role === "RECEPTION") {
+                        window.location.replace("/reception" + window.location.hash);
+                    } else if (me.role === "SUPER_ADMIN") {
+                        window.location.replace("/admin" + window.location.hash);
+                    } else {
+                        showLinks("Noma'lum rol: " + me.role);
+                    }
+                } catch (e) {
+                    msg.innerText = "Server bilan bog'lanishda xatolik yuz berdi.";
+                }
+            }
+
+            window.onload = route;
+        })();
+    </script>
+</body>
+</html>

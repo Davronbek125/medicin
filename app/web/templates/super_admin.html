@@ -1,0 +1,886 @@
+﻿<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin - Klinika Boshqaruvi</title>
+    <script src="/static/js/telegram-web-app.js?v=1"></script>
+    <script src="/static/js/auth.js?v=3"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v=3">
+</head>
+<body>
+    <div class="container">
+        <!-- Login Box (Agar avtorizatsiyadan o'tmagan bo'lsa) -->
+        <div id="loginSection" class="card" style="max-width: 400px; margin: 40px auto; display: none;">
+            <h2 class="card-title" style="justify-content: center; margin-bottom: 20px;">👑 Super Admin Kirish</h2>
+            <div id="loginError" class="badge badge-danger" style="display: none; width: 100%; margin-bottom: 12px; text-align: center; padding: 8px;"></div>
+            <div class="form-group">
+                <label class="form-label">Login</label>
+                <input type="text" id="adminLogin" class="form-control" placeholder="admin">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Parol</label>
+                <input type="password" id="adminPassword" class="form-control" placeholder="••••••••">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="handleLogin()">Kirish</button>
+        </div>
+
+        <!-- Asosiy Dashboard -->
+        <div id="dashboardSection" style="display: none;">
+            <div class="header">
+                <h1>👑 Super Admin Paneli</h1>
+                <div style="display: flex; gap: 6px;">
+                    <a class="btn btn-outline" href="/reception" onclick="location.href='/reception'+(window.location.hash||''); return false;">🏢 Qabulxona</a>
+                    <button class="btn btn-outline" onclick="handleLogout()">Chiqish</button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('statsTab', this)">📊 Statistika (KPI)</button>
+                <button class="tab-btn" onclick="switchTab('doctorsTab', this)">👨‍⚕️ Shifokorlar</button>
+                <button class="tab-btn" onclick="switchTab('staffTab', this)">🔑 Xodimlar</button>
+                <button class="tab-btn" onclick="switchTab('blockedTab', this)">🚫 Bloklanganlar</button>
+                <button class="tab-btn" onclick="switchTab('clinicTab', this)">📍 Klinika sozlamalari</button>
+            </div>
+
+            <!-- Tab 1: KPI Statistika -->
+            <div id="statsTab" class="tab-content">
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-num" id="statTotal">0</div>
+                        <div class="stat-label">Bugungi bemorlar</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-num" id="statWaiting" style="color: var(--warning);">0</div>
+                        <div class="stat-label">Kutayotganlar</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-num" id="statCompleted" style="color: var(--success);">0</div>
+                        <div class="stat-label">Qabul qilingan</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-num" id="statSkipped" style="color: var(--danger);">0</div>
+                        <div class="stat-label">Kelmaganlar</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-num" id="statWaitTime" style="color: #3182ce;">0 daq</div>
+                        <div class="stat-label">O'rtacha kutish</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-num" id="statNoShowRate" style="color: #dd6b20;">0%</div>
+                        <div class="stat-label">Kelmaslik ulushi</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">📌 Oqim va Manbalar taqsimoti</div>
+                    <p style="color: var(--gray-muted); font-size: 0.9rem;" id="statRatioText">Yuklanmoqda...</p>
+                </div>
+            </div>
+
+            <!-- Tab 2: Shifokorlar -->
+            <div id="doctorsTab" class="tab-content" style="display: none;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;">
+                    <button class="btn btn-primary" onclick="openDoctorModal()">➕ Yangi Shifokor</button>
+                    <button class="btn btn-outline" onclick="openSpecialtyModal()">🩺 Yo'nalishlar</button>
+                    <button class="btn btn-outline" onclick="openDayOffModal()">🌴 Ta'til / Dam olish</button>
+                </div>
+                <div id="doctorsListContainer"></div>
+            </div>
+
+            <!-- Tab 3: Xodimlar va Taklif havolalari -->
+            <div id="staffTab" class="tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-title">🔗 Yangi xodim uchun taklif havolasi yaratish</div>
+                    <p style="font-size: 0.85rem; color: var(--gray-muted); margin-bottom: 12px;">
+                        Xodim Telegram ID sini kiritish shart emas! Havolani yuborsangiz, bot o'zi avtomatik ulaydi.
+                    </p>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                        <select id="inviteRole" class="form-control" onchange="toggleInviteDoctorSelect()">
+                            <option value="RECEPTION">Qabulxona (Reception)</option>
+                            <option value="DOCTOR">Shifokor</option>
+                        </select>
+                        <select id="inviteDoctor" class="form-control" style="display: none;">
+                            <!-- Shifokorlar ro'yxati -->
+                        </select>
+                        <button class="btn btn-primary" onclick="generateInviteLink()">Yaratish</button>
+                    </div>
+                    <div id="inviteResult" style="display: none; background: var(--gray-light); padding: 10px; border-radius: 8px; word-break: break-all;"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">👥 Faol xodimlar ro'yxati</div>
+                    <div id="staffListContainer"></div>
+                </div>
+
+                <div class="card" style="margin-top: 14px;">
+                    <div class="card-title">📜 Xodimlar amallari jurnali (Audit Log)</div>
+                    <div id="auditLogContainer" style="max-height: 250px; overflow-y: auto;"></div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Bloklangan bemorlar -->
+            <div id="blockedTab" class="tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-title">🚫 Kelmagan (No-Show) va Bloklangan Bemorlar</div>
+                    <p style="font-size: 0.85rem; color: var(--gray-muted); margin-bottom: 12px;">
+                        Navbatga yozilib kelmagan (no-show &gt;= 3) bemorlar vaqtincha bloklanadi. Super admin bu yerdan blokni yechishi mumkin.
+                    </p>
+                    <div id="blockedListContainer"></div>
+                </div>
+            </div>
+
+            <!-- Tab 5: Klinika sozlamalari -->
+            <div id="clinicTab" class="tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-title">🏥 Klinika Ma'lumotlari</div>
+                    <div class="form-group">
+                        <label class="form-label">Klinika nomi (UZ)</label>
+                        <input type="text" id="clinicNameUz" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Klinika nomi (RU)</label>
+                        <input type="text" id="clinicNameRu" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Manzil (UZ)</label>
+                        <input type="text" id="clinicAddressUz" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Manzil (RU)</label>
+                        <input type="text" id="clinicAddressRu" class="form-control">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label">Lokatsiya (kenglik / lat)</label>
+                            <input type="text" id="clinicLat" class="form-control" placeholder="41.311081">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label class="form-label">Lokatsiya (uzunlik / lon)</label>
+                            <input type="text" id="clinicLon" class="form-control" placeholder="69.240562">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Telefonlar</label>
+                        <input type="text" id="clinicPhones" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ish vaqti (UZ)</label>
+                        <input type="text" id="clinicHoursUz" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ish vaqti (RU)</label>
+                        <input type="text" id="clinicHoursRu" class="form-control">
+                    </div>
+                    <button class="btn btn-success" onclick="saveClinicSettings()">Saqlash</button>
+                </div>
+
+                <div class="card" style="margin-top: 16px;">
+                    <div class="card-title">🔐 Admin parolini o'zgartirish</div>
+                    <div class="form-group">
+                        <label class="form-label">Joriy parol</label>
+                        <input type="password" id="oldPasswordInput" class="form-control" placeholder="••••••••">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Yangi parol</label>
+                        <input type="password" id="newPasswordInput" class="form-control" placeholder="••••••••">
+                    </div>
+                    <button class="btn btn-primary" onclick="changeAdminPassword()">Parolni yangilash</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mutaxassisliklar modali -->
+    <div id="specialtyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">🩺 Mutaxassisliklar (Yo'nalishlar)</h3>
+                <button class="close-btn" onclick="closeSpecialtyModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nomi (UZ)</label>
+                <input type="text" id="specNameUz" class="form-control" placeholder="Terapevt">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nomi (RU)</label>
+                <input type="text" id="specNameRu" class="form-control" placeholder="Терапевт">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="addSpecialty()" style="margin-bottom: 14px;">➕ Yo'nalish qo'shish</button>
+            <div class="card-title" style="font-size: 0.95rem; margin-top: 10px;">Mavjud yo'nalishlar:</div>
+            <div id="specialtyListContainer" style="max-height: 220px; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <!-- Ta'til / Dam olish kuni modali -->
+    <div id="dayOffModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">🌴 Shifokor dam olish / ta'til kuni</h3>
+                <button class="close-btn" onclick="closeDayOffModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Shifokor</label>
+                <select id="dayOffDoctorSelect" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Sana</label>
+                <input type="date" id="dayOffDateInput" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Sabab / Izoh (ixtiyoriy)</label>
+                <input type="text" id="dayOffReasonInput" class="form-control" placeholder="Rejali ta'til">
+            </div>
+            <p style="font-size: 0.8rem; color: var(--danger); margin-bottom: 12px;">
+                ⚠️ Diqqat: Ushbu sanaga band qilingan qabullar bekor qilinadi va bemorlarga botdan xabar jo'natiladi!
+            </p>
+            <button class="btn btn-danger btn-block" onclick="saveDayOff()">Belgilash va bekor qilish</button>
+        </div>
+    </div>
+
+    <!-- Shifokor qo'shish modali -->
+    <div id="doctorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="doctorModalTitle">Yangi Shifokor</h3>
+                <button class="close-btn" onclick="closeDoctorModal()">&times;</button>
+            </div>
+            <input type="hidden" id="editDoctorId">
+            <div class="form-group">
+                <label class="form-label">Yo'nalishi</label>
+                <select id="docSpecialtySelect" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">F.I.Sh. (O'zbekcha)</label>
+                <input type="text" id="docNameUz" class="form-control" placeholder="Dr. Jasur Aliyev">
+            </div>
+            <div class="form-group">
+                <label class="form-label">F.I.Sh. (Ruscha)</label>
+                <input type="text" id="docNameRu" class="form-control" placeholder="Др. Джасур Алиев">
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <div class="form-group" style="flex: 1;">
+                    <label class="form-label">Xona raqami</label>
+                    <input type="text" id="docRoom" class="form-control" placeholder="204">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label class="form-label">O'rtacha vaqt (daq)</label>
+                    <input type="number" id="docAvgTime" class="form-control" value="15">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Qisqacha tavsif (UZ)</label>
+                <textarea id="docDescUz" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Qisqacha tavsif (RU)</label>
+                <textarea id="docDescRu" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Rasm havolasi (URL, ixtiyoriy)</label>
+                <input type="text" id="docRasmUrl" class="form-control" placeholder="https://.../doctor.jpg">
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <div class="form-group" style="flex: 1;">
+                    <label class="form-label">Tajriba (yil)</label>
+                    <input type="number" id="docExperience" class="form-control" value="0">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label class="form-label">Tartib (ro'yxatdagi o'rni)</label>
+                    <input type="number" id="docTartib" class="form-control" value="0">
+                </div>
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="docVisible" style="width: auto;" checked>
+                <label class="form-label" for="docVisible" style="margin: 0;">Botda ko'rinadi (bemorlarga ko'rsatiladi)</label>
+            </div>
+
+            <!-- Ish grafigi (faqat tahrirlashda mavjud shifokor uchun) -->
+            <div id="docScheduleBlock" style="display: none;">
+                <div class="card-title" style="font-size: 0.95rem; margin: 12px 0 8px;">🗓 Ish grafigi</div>
+                <div id="docScheduleContainer"></div>
+                <button class="btn btn-outline btn-block" style="margin-top: 8px;" onclick="saveDoctorSchedules()">🗓 Grafikni saqlash</button>
+            </div>
+
+            <button class="btn btn-primary btn-block" style="margin-top: 12px;" onclick="saveDoctor()">Saqlash</button>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram?.WebApp;
+        if (tg) tg.expand();
+
+        let token = localStorage.getItem("admin_token") || "";
+
+        // Mahalliy vaqt zonasida YYYY-MM-DD satrini hosil qiladi.
+        // `Date.toISOString()` UTC beradi — Toshkent (UTC+5) uchun ertalab 05:00 gacha
+        // sana bir kun orqaga surilib qolishi mumkin edi.
+        function toLocalDateStr(d) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            return `${y}-${m}-${day}`;
+        }
+
+        async function init() {
+            if (!token) {
+                document.getElementById("loginSection").style.display = "block";
+                return;
+            }
+            // Token haqiqiyligini tekshirish (muddati o'tgan bo'lsa login oynasini ko'rsatamiz)
+            try {
+                const res = await fetch("/api/auth/me", {headers: {"Authorization": "Bearer " + token}});
+                const me = await res.json();
+                if (!me.authenticated || me.role !== "SUPER_ADMIN") {
+                    localStorage.removeItem("admin_token");
+                    token = "";
+                    document.getElementById("loginSection").style.display = "block";
+                    return;
+                }
+            } catch (e) {
+                // Tarmoq xatosi bo'lsa ham davom etamiz (offline sinov)
+            }
+            document.getElementById("dashboardSection").style.display = "block";
+            loadStats();
+            loadDoctors();
+            loadStaff();
+            loadBlockedUsers();
+            loadClinic();
+            loadAuditLogs();
+        }
+
+        async function handleLogin() {
+            const login = document.getElementById("adminLogin").value;
+            const password = document.getElementById("adminPassword").value;
+            const errEl = document.getElementById("loginError");
+            errEl.style.display = "none";
+
+            try {
+                const res = await fetch("/api/auth/login", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({login, password})
+                });
+                const data = await res.json();
+                if (res.ok && data.token) {
+                    token = data.token;
+                    localStorage.setItem("admin_token", token);
+                    localStorage.setItem("admin_login", login);
+                    document.getElementById("loginSection").style.display = "none";
+                    document.getElementById("dashboardSection").style.display = "block";
+                    init();
+                } else {
+                    errEl.innerText = data.detail || "Kirishda xatolik.";
+                    errEl.style.display = "block";
+                }
+            } catch (e) {
+                errEl.innerText = "Server bilan bog'lanishda xatolik.";
+                errEl.style.display = "block";
+            }
+        }
+
+        function handleLogout() {
+            localStorage.removeItem("admin_token");
+            location.reload();
+        }
+
+        function switchTab(tabId, btn) {
+            document.querySelectorAll(".tab-content").forEach(el => el.style.display = "none");
+            document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
+            document.getElementById(tabId).style.display = "block";
+            if (btn) btn.classList.add("active");
+            if (tabId === 'blockedTab') loadBlockedUsers();
+            if (tabId === 'doctorsTab') loadDoctors();
+            if (tabId === 'staffTab') loadAuditLogs();
+            if (tabId === 'statsTab') loadStats();
+        }
+
+        async function loadStats() {
+            const res = await fetch("/api/clinic/kpi");
+            const data = await res.json();
+            document.getElementById("statTotal").innerText = data.jami_bemorlar || 0;
+            document.getElementById("statWaiting").innerText = data.kutayotgan || 0;
+            document.getElementById("statCompleted").innerText = data.yakunlangan || 0;
+            document.getElementById("statSkipped").innerText = data.kelmagan || 0;
+            if (document.getElementById("statWaitTime")) {
+                document.getElementById("statWaitTime").innerText = `${data.ortacha_kutish_vaqti || 0} daq`;
+            }
+            if (document.getElementById("statNoShowRate")) {
+                document.getElementById("statNoShowRate").innerText = `${data.kelmaslik_foizi || 0}%`;
+            }
+            document.getElementById("statRatioText").innerText = 
+                `⚡️ Jonli: ${data.jonli_navbatlar || 0} ta | 📅 Slotlar: ${data.slot_navbatlar || 0} ta | 🤖 Bot: ${data.bot_orqali || 0} ta | 🏢 Reception: ${data.reception_orqali || 0} ta | 👨‍⚕️ Faol shifokorlar: ${data.faol_shifokorlar || 0} ta`;
+        }
+
+        async function loadAuditLogs() {
+            const res = await fetch("/api/staff/audit-log");
+            const logs = await res.json();
+            const container = document.getElementById("auditLogContainer");
+            if (!container) return;
+            if (!logs || !logs.length) {
+                container.innerHTML = "<p style='font-size: 0.85rem; color: var(--gray-muted);'>Amallar jurnali hozircha bo'sh.</p>";
+                return;
+            }
+            container.innerHTML = logs.map(l => `
+                <div class="queue-item" style="padding: 6px 10px; margin-bottom: 4px; font-size: 0.85rem;">
+                    <div class="queue-info">
+                        <div style="font-weight: 600;">⚡️ ${esc(l.amal)} [${esc(l.obyekt)}]</div>
+                        <div style="font-size: 0.75rem; color: var(--gray-muted);">${esc(l.tafsilot)} | 🕒 ${esc(l.sana_vaqt)}</div>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        async function loadDoctors() {
+            const res = await fetch("/api/doctors?include_archived=false");
+            const docs = await res.json();
+            const container = document.getElementById("doctorsListContainer");
+            const inviteSelect = document.getElementById("inviteDoctor");
+            inviteSelect.innerHTML = "";
+
+            if (!docs.length) {
+                container.innerHTML = "<p>Shifokorlar mavjud emas.</p>";
+                return;
+            }
+
+            container.innerHTML = docs.map(d => `
+                <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-weight: 700; font-size: 1.05rem;">👨‍⚕️ ${esc(d.ism_uz)} ${d.botda_korinadi ? '' : '<span class="badge badge-danger">🙈 Yashirilgan</span>'}</div>
+                        <div style="font-size: 0.85rem; color: var(--gray-muted);">
+                            🩺 ${esc(d.mutaxassislik_uz || 'Mutaxassis')} | 🚪 ${esc(d.xona)}-xona | ⏱ ${esc(d.ortacha_vaqt)} daq
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <a class="btn btn-outline" href="/doctor?doctor_id=${d.id}" onclick="location.href='/doctor?doctor_id=${d.id}'+(window.location.hash||''); return false;">🩺 Kabinet</a>
+                        <button class="btn btn-outline" onclick="openDoctorModal(${d.id})">✏️ Tahrirlash</button>
+                        <button class="btn btn-outline" onclick="openDayOffModal(${d.id})">🌴 Ta'til</button>
+                        <button class="btn btn-outline" onclick="archiveDoctor(${d.id})">🗑 Arxivlash</button>
+                    </div>
+                </div>
+            `).join("");
+
+            docs.forEach(d => {
+                inviteSelect.innerHTML += `<option value="${d.id}">${esc(d.ism_uz)} (${esc(d.xona)}-xona)</option>`;
+            });
+        }
+
+        async function archiveDoctor(docId) {
+            if (!confirm("Haqiqatan ham bu shifokorni arxivlamoqchimisiz?")) return;
+            await fetch(`/api/doctors/${docId}`, {method: "DELETE"});
+            loadDoctors();
+        }
+
+        function toggleInviteDoctorSelect() {
+            const role = document.getElementById("inviteRole").value;
+            document.getElementById("inviteDoctor").style.display = (role === "DOCTOR") ? "block" : "none";
+        }
+
+        async function generateInviteLink() {
+            const role = document.getElementById("inviteRole").value;
+            const doctor_id = (role === "DOCTOR") ? parseInt(document.getElementById("inviteDoctor").value) : null;
+            const res = await fetch("/api/staff/invite", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({rol: role, doctor_id})
+            });
+            const data = await res.json();
+            const resEl = document.getElementById("inviteResult");
+            resEl.style.display = "block";
+            resEl.innerHTML = `<b>Bir martalik taklif havolasi:</b><br><a href="${esc(data.invite_url)}" target="_blank">${esc(data.invite_url)}</a><br><small>Ushbu havolani xodimga Telegram orqali yuboring (24 soat amal qiladi).</small>`;
+            loadStaff();
+        }
+
+        async function loadStaff() {
+            const res = await fetch("/api/staff");
+            const staffList = await res.json();
+            const container = document.getElementById("staffListContainer");
+            if (!staffList.length) {
+                container.innerHTML = "<p>Hozircha biriktirilgan xodimlar yo'q.</p>";
+                return;
+            }
+            container.innerHTML = staffList.map(s => {
+                const isAdmin = s.rol === "SUPER_ADMIN";
+                const label = isAdmin
+                    ? "👑 Super Admin"
+                    : (s.rol === "RECEPTION" ? "🏢 Reception" : "👨‍⚕️ " + esc(s.doctor_name || "Shifokor"));
+                // Super Admin qatorini o'chirish mumkin emas — aks holda Telegram
+                // WebApp orqali boshqaruv paneliga kirish butunlay yopilib qoladi.
+                const action = isAdmin
+                    ? ""
+                    : `<button class="btn btn-outline" onclick="revokeStaff(${s.id})">❌ O'chirish</button>`;
+                return `
+                <div class="queue-item">
+                    <div class="queue-info">
+                        <div class="queue-name">${label}</div>
+                        <div class="queue-meta">TG ID: ${esc(s.telegram_id)} | ${s.faol ? "🟢 Faol" : "🔴 Nofaol"}</div>
+                    </div>
+                    ${action}
+                </div>
+            `;
+            }).join("");
+        }
+
+        async function revokeStaff(id) {
+            if (!confirm("Xodim huquqini bekor qilmoqchimisiz?")) return;
+            await fetch(`/api/staff/${id}`, {method: "DELETE"});
+            loadStaff();
+        }
+
+        async function loadClinic() {
+            const res = await fetch("/api/clinic");
+            const c = await res.json();
+            document.getElementById("clinicNameUz").value = c.nomi_uz || "";
+            document.getElementById("clinicNameRu").value = c.nomi_ru || "";
+            document.getElementById("clinicAddressUz").value = c.manzil_uz || "";
+            document.getElementById("clinicAddressRu").value = c.manzil_ru || "";
+            document.getElementById("clinicLat").value = (c.lokatsiya_lat ?? "");
+            document.getElementById("clinicLon").value = (c.lokatsiya_lon ?? "");
+            document.getElementById("clinicPhones").value = c.telefonlar || "";
+            document.getElementById("clinicHoursUz").value = c.ish_vaqti_uz || "";
+            document.getElementById("clinicHoursRu").value = c.ish_vaqti_ru || "";
+        }
+
+        async function saveClinicSettings() {
+            const latRaw = document.getElementById("clinicLat").value.trim();
+            const lonRaw = document.getElementById("clinicLon").value.trim();
+            await fetch("/api/clinic", {
+                method: "PUT",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    nomi_uz: document.getElementById("clinicNameUz").value,
+                    nomi_ru: document.getElementById("clinicNameRu").value,
+                    manzil_uz: document.getElementById("clinicAddressUz").value,
+                    manzil_ru: document.getElementById("clinicAddressRu").value,
+                    lokatsiya_lat: latRaw === "" ? null : parseFloat(latRaw),
+                    lokatsiya_lon: lonRaw === "" ? null : parseFloat(lonRaw),
+                    telefonlar: document.getElementById("clinicPhones").value,
+                    ish_vaqti_uz: document.getElementById("clinicHoursUz").value,
+                    ish_vaqti_ru: document.getElementById("clinicHoursRu").value
+                })
+            });
+            alert("Klinika ma'lumotlari saqlandi! ✅");
+        }
+
+        async function openDoctorModal(docId = null) {
+            const res = await fetch("/api/doctors/specialties");
+            const specs = await res.json();
+            const sel = document.getElementById("docSpecialtySelect");
+            sel.innerHTML = specs.map(s => `<option value="${s.id}">${esc(s.nomi_uz)}</option>`).join("");
+
+            // Formani tozalash (yangi shifokor uchun)
+            document.getElementById("editDoctorId").value = "";
+            document.getElementById("doctorModalTitle").innerText = "Yangi Shifokor";
+            document.getElementById("docNameUz").value = "";
+            document.getElementById("docNameRu").value = "";
+            document.getElementById("docRoom").value = "";
+            document.getElementById("docAvgTime").value = 15;
+            document.getElementById("docDescUz").value = "";
+            document.getElementById("docDescRu").value = "";
+            document.getElementById("docRasmUrl").value = "";
+            document.getElementById("docExperience").value = 0;
+            document.getElementById("docTartib").value = 0;
+            document.getElementById("docVisible").checked = true;
+            // Grafik bloki faqat mavjud (yaratilgan) shifokor uchun ko'rsatiladi
+            document.getElementById("docScheduleBlock").style.display = "none";
+            document.getElementById("docScheduleContainer").innerHTML = "";
+
+            // Tahrirlash rejimi
+            if (docId) {
+                try {
+                    const dres = await fetch(`/api/doctors/${docId}`);
+                    const data = await dres.json();
+                    const d = data.doctor;
+                    if (d) {
+                        document.getElementById("editDoctorId").value = d.id;
+                        document.getElementById("doctorModalTitle").innerText = "Shifokorni tahrirlash";
+                        if (d.specialty_id) sel.value = d.specialty_id;
+                        document.getElementById("docNameUz").value = d.ism_uz || "";
+                        document.getElementById("docNameRu").value = d.ism_ru || "";
+                        document.getElementById("docRoom").value = d.xona || "";
+                        document.getElementById("docAvgTime").value = d.ortacha_vaqt || 15;
+                        document.getElementById("docDescUz").value = d.tavsif_uz || "";
+                        document.getElementById("docDescRu").value = d.tavsif_ru || "";
+                        document.getElementById("docRasmUrl").value = d.rasm_url || "";
+                        document.getElementById("docExperience").value = d.tajriba_yili || 0;
+                        document.getElementById("docTartib").value = d.tartib || 0;
+                        document.getElementById("docVisible").checked = (d.botda_korinadi === 1 || d.botda_korinadi === true);
+                        renderDoctorSchedules(data.schedules || []);
+                    }
+                } catch (e) {
+                    alert("Shifokor ma'lumotlarini yuklashda xatolik.");
+                }
+            }
+
+            document.getElementById("doctorModal").classList.add("active");
+        }
+
+        const HAFTA_KUNLARI = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"];
+
+        function renderDoctorSchedules(schedules) {
+            const byDay = {};
+            (schedules || []).forEach(s => { byDay[s.hafta_kuni] = s; });
+            const container = document.getElementById("docScheduleContainer");
+            container.innerHTML = HAFTA_KUNLARI.map((nom, i) => {
+                const s = byDay[i] || {};
+                const active = s.faol === 1 || s.faol === true;
+                return `
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap;">
+                        <label style="width: 96px; font-weight: 600; font-size: 0.85rem;">
+                            <input type="checkbox" class="sch-active" data-day="${i}" ${active ? "checked" : ""} style="width:auto;"> ${nom}
+                        </label>
+                        <input type="time" class="form-control sch-live-start" data-day="${i}" value="${esc(s.jonli_boshlanish || '10:00')}" style="width: 104px;">
+                        <span>–</span>
+                        <input type="time" class="form-control sch-live-end" data-day="${i}" value="${esc(s.jonli_tugash || '15:00')}" style="width: 104px;">
+                        <span style="font-size:0.75rem; color: var(--gray-muted);">slot:</span>
+                        <input type="time" class="form-control sch-slot-start" data-day="${i}" value="${esc(s.slot_boshlanish || '15:00')}" style="width: 104px;">
+                        <span>–</span>
+                        <input type="time" class="form-control sch-slot-end" data-day="${i}" value="${esc(s.slot_tugash || '16:00')}" style="width: 104px;">
+                    </div>`;
+            }).join("");
+            document.getElementById("docScheduleBlock").style.display = "block";
+        }
+
+        async function saveDoctorSchedules() {
+            const docId = document.getElementById("editDoctorId").value;
+            if (!docId) return;
+            const schedules = [];
+            for (let i = 0; i < 7; i++) {
+                const get = sel => document.querySelector(`${sel}[data-day="${i}"]`);
+                schedules.push({
+                    hafta_kuni: i,
+                    faol: get(".sch-active").checked ? 1 : 0,
+                    jonli_boshlanish: get(".sch-live-start").value || "10:00",
+                    jonli_tugash: get(".sch-live-end").value || "15:00",
+                    slot_boshlanish: get(".sch-slot-start").value || "15:00",
+                    slot_tugash: get(".sch-slot-end").value || "16:00"
+                });
+            }
+            const res = await fetch(`/api/doctors/${docId}/schedules`, {
+                method: "PUT",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(schedules)
+            });
+            if (res.ok) {
+                alert("Ish grafigi saqlandi! ✅");
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.detail || "Ish grafigini saqlashda xatolik.");
+            }
+        }
+
+        function closeDoctorModal() {
+            document.getElementById("doctorModal").classList.remove("active");
+        }
+
+        async function saveDoctor() {
+            const editId = document.getElementById("editDoctorId").value;
+            const specialty_id = parseInt(document.getElementById("docSpecialtySelect").value);
+            const ism_uz = document.getElementById("docNameUz").value.trim();
+            const ism_ru = document.getElementById("docNameRu").value.trim() || ism_uz;
+            const xona = document.getElementById("docRoom").value.trim();
+            const ortacha_vaqt = parseInt(document.getElementById("docAvgTime").value) || 15;
+            const tavsif_uz = document.getElementById("docDescUz").value;
+            const tavsif_ru = document.getElementById("docDescRu").value;
+            const rasm_url = document.getElementById("docRasmUrl").value.trim() || null;
+            const tajriba_yili = parseInt(document.getElementById("docExperience").value) || 0;
+            const tartib = parseInt(document.getElementById("docTartib").value) || 0;
+            const botda_korinadi = document.getElementById("docVisible").checked ? 1 : 0;
+
+            if (!ism_uz || !xona) {
+                alert("Ism va xonani to'ldiring!");
+                return;
+            }
+
+            const payload = {specialty_id, ism_uz, ism_ru, xona, ortacha_vaqt, tavsif_uz, tavsif_ru, rasm_url, tajriba_yili, tartib, botda_korinadi};
+
+            let res;
+            if (editId) {
+                res = await fetch(`/api/doctors/${editId}`, {
+                    method: "PUT",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                res = await fetch("/api/doctors", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(payload)
+                });
+            }
+
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                alert(data.detail || "Shifokorni saqlashda xatolik.");
+                return;
+            }
+            closeDoctorModal();
+            loadDoctors();
+        }
+
+        // --- Mutaxassisliklar (Yo'nalishlar) ---
+        async function openSpecialtyModal() {
+            document.getElementById("specialtyModal").classList.add("active");
+            loadSpecialties();
+        }
+
+        function closeSpecialtyModal() {
+            document.getElementById("specialtyModal").classList.remove("active");
+        }
+
+        async function loadSpecialties() {
+            const res = await fetch("/api/doctors/specialties");
+            const specs = await res.json();
+            const container = document.getElementById("specialtyListContainer");
+            if (!specs.length) {
+                container.innerHTML = "<p style='font-size: 0.85rem; color: var(--gray-muted);'>Yo'nalishlar mavjud emas.</p>";
+                return;
+            }
+            container.innerHTML = specs.map(s => `
+                <div class="queue-item" style="padding: 8px 12px; margin-bottom: 6px;">
+                    <div class="queue-info">
+                        <div class="queue-name">${esc(s.nomi_uz)} (${esc(s.nomi_ru)})</div>
+                    </div>
+                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem;" onclick="deleteSpecialty(${s.id})">🗑 O'chirish</button>
+                </div>
+            `).join("");
+        }
+
+        async function addSpecialty() {
+            const nomi_uz = document.getElementById("specNameUz").value.trim();
+            const nomi_ru = document.getElementById("specNameRu").value.trim() || nomi_uz;
+            if (!nomi_uz) {
+                alert("Yo'nalish nomini kiriting!");
+                return;
+            }
+            const res = await fetch("/api/doctors/specialties", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({nomi_uz, nomi_ru, tartib: 0})
+            });
+            if (res.ok) {
+                document.getElementById("specNameUz").value = "";
+                document.getElementById("specNameRu").value = "";
+                loadSpecialties();
+            } else {
+                alert("Yo'nalish qo'shishda xatolik.");
+            }
+        }
+
+        async function deleteSpecialty(id) {
+            if (!confirm("Ushbu yo'nalishni o'chirmoqchimisiz?")) return;
+            await fetch(`/api/doctors/specialties/${id}`, {method: "DELETE"});
+            loadSpecialties();
+        }
+
+        // --- Shifokor ta'tili / Dam olish kuni ---
+        async function openDayOffModal(docId = null) {
+            const res = await fetch("/api/doctors?include_archived=false");
+            const docs = await res.json();
+            const sel = document.getElementById("dayOffDoctorSelect");
+            sel.innerHTML = docs.map(d => `<option value="${d.id}" ${docId === d.id ? 'selected' : ''}>${esc(d.ism_uz)} (${esc(d.xona)}-xona)</option>`).join("");
+            
+            const tmr = new Date();
+            tmr.setDate(tmr.getDate() + 1);
+            document.getElementById("dayOffDateInput").value = toLocalDateStr(tmr);
+            document.getElementById("dayOffModal").classList.add("active");
+        }
+
+        function closeDayOffModal() {
+            document.getElementById("dayOffModal").classList.remove("active");
+        }
+
+        async function saveDayOff() {
+            const doctor_id = parseInt(document.getElementById("dayOffDoctorSelect").value);
+            const sana = document.getElementById("dayOffDateInput").value;
+            const sabab = document.getElementById("dayOffReasonInput").value.trim() || "Ta'til";
+
+            if (!sana || !doctor_id) {
+                alert("Shifokor va sanani tanlang!");
+                return;
+            }
+
+            if (!confirm(`${sana} kuni uchun shifokorga ta'til belgilansinmi? Shu kundagi barcha bemorlar qabuli bekor qilinadi va ularga bot orqali xabar boradi!`)) {
+                return;
+            }
+
+            const res = await fetch("/api/doctors/days-off", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({doctor_id, sana, sabab})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                const cancelled = (data.cancelled_count ?? data.bekor_qilingan_qabullar ?? 0);
+                alert(`Dam olish kuni belgilandi! ${cancelled} ta qabul bekor qilindi va bemorlarga xabar yuborildi. ✅`);
+                closeDayOffModal();
+            } else {
+                alert(data.detail || "Xatolik yuz berdi.");
+            }
+        }
+
+        // --- Bloklangan (No-Show) Bemorlar ---
+        async function loadBlockedUsers() {
+            const res = await fetch("/api/staff/blocked-users");
+            const users = await res.json();
+            const container = document.getElementById("blockedListContainer");
+            if (!users || !users.length) {
+                container.innerHTML = "<p style='color: var(--gray-muted);'>Hozircha bloklangan yoki kelmagan bemorlar yo'q. Hammasi joyida! ✅</p>";
+                return;
+            }
+
+            container.innerHTML = users.map(u => `
+                <div class="card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div>
+                        <div style="font-weight: 700;">👤 ${esc(u.ism || 'Noma\'lum')} (${esc(u.telefon || 'Telefon yo\'q')})</div>
+                        <div style="font-size: 0.85rem; color: var(--danger);">
+                            Kelmaganlik (No-Show): ${esc(u.no_show_count)} marta ${u.booking_blocked_until ? `| Bloklangan: ${esc(u.booking_blocked_until.slice(0, 10))} gacha` : ''}
+                        </div>
+                    </div>
+                    <button class="btn btn-outline" style="border-color: var(--success); color: var(--success);" onclick="unblockUser(${u.id})">
+                        🔓 Blokdan yechish
+                    </button>
+                </div>
+            `).join("");
+        }
+
+        async function unblockUser(userId) {
+            if (!confirm("Bemor blokini yechishni tasdiqlaysizmi?")) return;
+            const res = await fetch(`/api/staff/unblock-user/${userId}`, {method: "POST"});
+            if (res.ok) {
+                alert("Bemor bloki muvaffaqiyatli yechildi! ✅");
+                loadBlockedUsers();
+            }
+        }
+
+        // --- Admin Parolini Almashtirish ---
+        async function changeAdminPassword() {
+            const old_password = document.getElementById("oldPasswordInput").value;
+            const new_password = document.getElementById("newPasswordInput").value;
+
+            if (!old_password || !new_password) {
+                alert("Eski va yangi parolni kiriting!");
+                return;
+            }
+
+            const login = localStorage.getItem("admin_login") || "admin";
+            const res = await fetch("/api/auth/change-password", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({login, old_password, new_password})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert("Parol muvaffaqiyatli yangilandi! ✅");
+                document.getElementById("oldPasswordInput").value = "";
+                document.getElementById("newPasswordInput").value = "";
+            } else {
+                alert(data.detail || "Parolni o'zgartirishda xatolik.");
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

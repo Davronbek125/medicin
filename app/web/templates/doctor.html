@@ -1,0 +1,351 @@
+﻿<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shifokor Kabineti</title>
+    <script src="/static/js/telegram-web-app.js?v=1"></script>
+    <script src="/static/js/auth.js?v=3"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v=3">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1 id="docHeaderTitle">👨‍⚕️ Shifokor Kabineti</h1>
+                <span style="font-size: 0.85rem; color: var(--gray-muted);" id="docHeaderMeta">Yuklanmoqda...</span>
+            </div>
+            <span class="badge badge-success" id="docRoomBadge">Xona: --</span>
+        </div>
+
+        <!-- Sana tanlash: bugungi navbat yoki keyingi kunlardagi oldindan yozilishlar -->
+        <div style="display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap;">
+            <input type="date" id="docDatePicker" class="form-control" style="max-width: 190px;" onchange="loadDoctorQueue()">
+            <button class="btn btn-outline" onclick="setDocDate(0)">Bugun</button>
+            <button class="btn btn-outline" onclick="setDocDate(1)">Ertaga</button>
+        </div>
+        <div id="docDateNotice" style="display:none; margin-bottom: 16px; padding: 10px 12px; border-radius: 8px; background: #fefcbf; color: #744210; font-size: 0.85rem;"></div>
+
+        <!-- 1. Hozir qabuldagi bemor banneri -->
+        <div id="activeBanner" class="active-patient-banner" style="display: none;">
+            <div class="active-patient-header">🟢 Hozir qabuldagi bemor</div>
+            <div class="active-patient-name" id="activePatientName">--</div>
+            <div style="font-size: 0.9rem; margin-bottom: 14px;" id="activePatientMeta">Talon: #--</div>
+            <button class="btn btn-success" style="background: white; color: #2b6cb0;" onclick="completeCurrent()">✅ Qabul yakunlandi</button>
+        </div>
+
+        <div id="noActiveBanner" class="card" style="text-align: center; padding: 20px; color: var(--gray-muted);">
+            Hozir xonada bemor yo'q. Navbatdagi bemorni chaqirishingiz mumkin.
+        </div>
+
+        <!-- Tezkor Chaqirish Tugmasi -->
+        <div style="margin-bottom: 20px;">
+            <button id="btnCallNext" class="btn btn-primary btn-block" onclick="callNextPatient()">
+                🔔 Keyingi bemorni chaqirish
+            </button>
+        </div>
+
+        <!-- 2. Navbatdagi bemorlar ro'yxati -->
+        <div class="card">
+            <div class="card-title">
+                <span id="waitingTitle">📋 Navbatdagi bemorlar</span>
+                <span class="badge badge-warning" id="waitingCountBadge">0 kishi</span>
+            </div>
+            <div id="doctorQueueList"></div>
+        </div>
+
+        <!-- 3. Kelmagan / O'tkazib yuborilganlar -->
+        <div class="card">
+            <div class="card-title">
+                <span>⏭ Kelmagan bemorlar</span>
+                <span class="badge badge-danger" id="skippedCountBadge">0 kishi</span>
+            </div>
+            <div id="doctorSkippedList"></div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram?.WebApp;
+        if (tg) tg.expand();
+
+        let doctorId = null;
+        let isCalling = false; // Debounce himoyasi
+        let activeAppointmentId = null;
+        let docRefreshInterval = null;
+        let lastQueueSignature = null; // Ma'lumot o'zgarmagan bo'lsa — qayta chizmaymiz
+
+        // URL query parametridan (Super Admin/Reception ko'rishi uchun) doctor_id olish
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlDoctorId = urlParams.get("doctor_id");
+
+        function showPanelError(html) {
+            document.body.innerHTML = `<div class="container" style="text-align:center; margin-top:50px;">${html}</div>`;
+        }
+
+        // Super Admin brauzerdan kirsa — qaysi shifokor kabinetini ko'rishni tanlaydi
+        async function showDoctorPicker() {
+            try {
+                const res = await fetch("/api/doctors?include_archived=false");
+                const docs = await res.json();
+                if (!docs.length) {
+                    showPanelError("<h2>⚠️ Shifokorlar topilmadi.</h2>");
+                    return;
+                }
+                const links = docs.map(d =>
+                    `<a class="btn btn-outline btn-block" style="margin-bottom:8px;" href="/doctor?doctor_id=${d.id}">👨‍⚕️ ${esc(d.ism_uz)} (${esc(d.xona)}-xona)</a>`
+                ).join("");
+                showPanelError(`<h2>🩺 Shifokor kabinetini tanlang</h2><div style="max-width:380px; margin:20px auto;">${links}</div>`);
+            } catch (e) {
+                showPanelError("<h2>⚠️ Shifokorlar ro'yxatini yuklab bo'lmadi.</h2>");
+            }
+        }
+
+        async function init() {
+            // 1. Avval foydalanuvchi va uning rolini aniqlaymiz (initData yoki Super Admin tokeni)
+            let me = null;
+            try {
+                const res = await fetch("/api/auth/me", {
+                    headers: {"X-Telegram-Init-Data": (typeof window.getInitData === "function") ? window.getInitData() : (tg?.initData || "")}
+                });
+                me = await res.json();
+            } catch (e) { /* tarmoq xatosi */ }
+
+            if (me && me.authenticated) {
+                if (me.role === "DOCTOR") {
+                    // Shifokor FAQAT o'z kabinetini ko'radi — URL parametri e'tiborsiz qoldiriladi
+                    doctorId = me.doctor_id;
+                    if (!doctorId) {
+                        showPanelError("<h2>⚠️ Sizga shifokor kabineti biriktirilmagan.</h2>");
+                        return;
+                    }
+                } else {
+                    // Super Admin / Reception boshqa shifokor kabinetini ko'rishi mumkin
+                    doctorId = urlDoctorId || me.doctor_id || null;
+                    if (!doctorId) {
+                        await showDoctorPicker();
+                        return;
+                    }
+                }
+            } else {
+                // Autentifikatsiya yo'q — Telegram WebApp orqali yoki Super Admin sifatida
+                showPanelError(
+                    "<h2>⚠️ Panelni Telegram orqali oching</h2>" +
+                    "<p style='color:var(--gray-muted);'>Shifokor kabineti Telegram WebApp orqali ochilganda avtomatik ishlaydi.</p>" +
+                    "<p style='color:var(--gray-muted); font-size:0.85rem;'>Brauzerda ochgan bo'lsangiz — Super Admin sifatida kiring.</p>" +
+                    "<button class='btn btn-primary btn-block' style='max-width:320px; margin:16px auto 0;' onclick=\"showAdminLoginFallback('Shifokor kabineti uchun Super Admin sifatida kiring.')\">🔐 Super Admin sifatida kirish</button>"
+                );
+                return;
+            }
+
+            // Sana tanlagichni bugunga o'rnatish
+            document.getElementById("docDatePicker").value = todayStr();
+            await loadDoctorDetails();
+            await loadDoctorQueue();
+            startAutoRefresh();
+        }
+
+        async function loadDoctorDetails() {
+            const res = await fetch(`/api/doctors/${doctorId}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const doc = data.doctor;
+            if (!doc) return;
+            document.getElementById("docHeaderTitle").innerText = `👨‍⚕️ ${doc.ism_uz}`;
+            document.getElementById("docHeaderMeta").innerText = `${doc.mutaxassislik_uz || ''} | O'rtacha qabul: ${doc.ortacha_vaqt} daq`;
+            document.getElementById("docRoomBadge").innerText = `${doc.xona}-xona`;
+        }
+
+        function todayStr() {
+            const d = new Date();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            return `${d.getFullYear()}-${m}-${day}`;
+        }
+
+        function setDocDate(offset) {
+            const d = new Date();
+            d.setDate(d.getDate() + offset);
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            document.getElementById("docDatePicker").value = `${d.getFullYear()}-${m}-${day}`;
+            loadDoctorQueue();
+        }
+
+        // Avtomatik yangilanish (10 soniya). Sahifa yashirin bo'lsa — to'xtatamiz.
+        function startAutoRefresh() {
+            if (docRefreshInterval) clearInterval(docRefreshInterval);
+            docRefreshInterval = setInterval(loadDoctorQueue, 10000);
+        }
+
+        function stopAutoRefresh() {
+            if (docRefreshInterval) {
+                clearInterval(docRefreshInterval);
+                docRefreshInterval = null;
+            }
+        }
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) {
+                stopAutoRefresh();
+            } else {
+                loadDoctorQueue();
+                startAutoRefresh();
+            }
+        });
+
+        async function loadDoctorQueue() {
+            const date = document.getElementById("docDatePicker").value || todayStr();
+            const isToday = date === todayStr();
+
+            const res = await fetch(`/api/queue/today?sana=${date}&doctor_id=${doctorId}`);
+            const data = await res.json();
+            const apps = data.appointments || [];
+
+            // Ma'lumot o'zgarmagan bo'lsa — DOM ni qayta chizmaymiz
+            const signature = `${date}|${doctorId}|${JSON.stringify(apps)}`;
+            if (signature === lastQueueSignature) return;
+            lastQueueSignature = signature;
+
+            const active = apps.find(a => a.holat === "CHAQIRILDI");
+            const waiting = apps.filter(a => a.holat === "KUTMOQDA");
+            const skipped = apps.filter(a => a.holat === "OTKAZILDI");
+
+            // Sana holati: eslatma, tugma va sarlavha
+            const notice = document.getElementById("docDateNotice");
+            const dt = new Date(date + "T00:00:00");
+            notice.style.display = isToday ? "none" : "block";
+            if (!isToday) {
+                notice.innerHTML = `📅 <b>${dt.toLocaleDateString('uz-UZ')}</b> kungi oldindan yozilishlar ko'rsatilmoqda. Chaqirish faqat o'sha kuni ishlaydi.`;
+            }
+            document.getElementById("btnCallNext").style.display = isToday ? "" : "none";
+            document.getElementById("waitingTitle").innerText = isToday
+                ? "📋 Navbatdagi bemorlar"
+                : "📅 Tanlangan kundagi yozilishlar";
+
+            // 1. Faol bemor banneri (faqat bugungi kun uchun)
+            if (isToday && active) {
+                activeAppointmentId = active.id;
+                document.getElementById("activeBanner").style.display = "block";
+                document.getElementById("noActiveBanner").style.display = "none";
+                document.getElementById("activePatientName").innerText = `#${active.talon_raqami} ${active.bemor_ismi}`;
+                document.getElementById("activePatientMeta").innerText = `${active.turi === 'SLOT' ? '📅 Slot: ' + active.slot_vaqti : '⚡️ Jonli navbat'} ${active.bemor_telefoni ? '| 📞 ' + active.bemor_telefoni : ''}`;
+            } else {
+                activeAppointmentId = null;
+                document.getElementById("activeBanner").style.display = "none";
+                document.getElementById("noActiveBanner").style.display = "block";
+            }
+
+            // 2. Kutayotganlar / kelgusi kun yozilishlari
+            document.getElementById("waitingCountBadge").innerText = `${waiting.length} kishi`;
+            const waitingContainer = document.getElementById("doctorQueueList");
+            if (!waiting.length) {
+                const msg = isToday ? "Kutayotgan bemorlar yo'q." : "Bu kunda yozilishlar yo'q.";
+                waitingContainer.innerHTML = `<p style='padding: 10px; color: var(--gray-muted);'>${msg}</p>`;
+            } else {
+                waitingContainer.innerHTML = waiting.map(a => {
+                    const checkIn = a.checked_in_at ? '<span class="badge badge-success">🟢 Kelgan</span>' : '<span class="badge badge-info">⚪ Kutmoqda</span>';
+                    const slotInfo = a.turi === 'SLOT' ? `<span class="badge badge-warning">⏰ Slot: ${esc(a.slot_vaqti)}</span>` : '<span class="badge badge-info">⚡️ Jonli</span>';
+                    const actions = isToday
+                        ? `<button class="btn btn-primary" onclick="callSpecific(${a.id})">Chaqirish</button>
+                           <button class="btn btn-outline" onclick="skipSpecific(${a.id})">Kelmadi</button>`
+                        : `<button class="btn btn-outline" onclick="cancelAppointment(${a.id})">❌ Bekor qilish</button>`;
+                    return `
+                        <div class="queue-item">
+                            <div class="queue-num">#${a.talon_raqami}</div>
+                            <div class="queue-info">
+                                <div class="queue-name">${esc(a.bemor_ismi)} ${checkIn} ${slotInfo}</div>
+                                <div class="queue-meta">${esc(a.bemor_telefoni || '')}</div>
+                            </div>
+                            <div style="display: flex; gap: 6px;">
+                                ${actions}
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+            }
+
+            // 3. O'tkazib yuborilganlar (faqat bugungi kun uchun ma'noga ega)
+            document.getElementById("skippedCountBadge").innerText = `${skipped.length} kishi`;
+            const skippedContainer = document.getElementById("doctorSkippedList");
+            if (!skipped.length) {
+                skippedContainer.innerHTML = "<p style='padding: 10px; color: var(--gray-muted);'>Kelmagan bemorlar yo'q.</p>";
+            } else {
+                skippedContainer.innerHTML = skipped.map(a => `
+                    <div class="queue-item">
+                        <div class="queue-num">#${a.talon_raqami}</div>
+                        <div class="queue-info">
+                            <div class="queue-name">${esc(a.bemor_ismi)}</div>
+                        </div>
+                        <button class="btn btn-outline" onclick="recallSpecific(${a.id})">↩️ Qaytarish</button>
+                    </div>
+                `).join("");
+            }
+        }
+
+        async function cancelAppointment(id) {
+            if (!confirm("Bu yozilishni bekor qilishni tasdiqlaysizmi?")) return;
+            const res = await fetch(`/api/queue/${id}/cancel`, {method: "POST"});
+            if (!res.ok) {
+                const e = await res.json().catch(() => ({}));
+                alert(e.detail || "Bekor qilishda xatolik yuz berdi.");
+            }
+            loadDoctorQueue();
+        }
+
+        async function callNextPatient() {
+            if (isCalling) return;
+            isCalling = true;
+            document.getElementById("btnCallNext").disabled = true;
+
+            try {
+                const res = await fetch(`/api/queue/today?doctor_id=${doctorId}`);
+                const data = await res.json();
+                const waiting = (data.appointments || []).filter(a => a.holat === "KUTMOQDA");
+
+                if (!waiting.length) {
+                    alert("Kutayotgan bemorlar mavjud emas!");
+                    return;
+                }
+
+                // Check-in qilgan birinchi bemor yoki navbatdagi birinchi bemor
+                const target = waiting.find(w => w.checked_in_at) || waiting[0];
+                if (!confirm(`Talon #${target.talon_raqami} (${target.bemor_ismi}) chaqirilsinmi?`)) return;
+
+                await fetch(`/api/queue/${target.id}/call`, {method: "POST"});
+                await loadDoctorQueue();
+            } finally {
+                // 3 soniyalik debounce himoyasi
+                setTimeout(() => {
+                    isCalling = false;
+                    document.getElementById("btnCallNext").disabled = false;
+                }, 3000);
+            }
+        }
+
+        async function callSpecific(id) {
+            if (!confirm("Bemor chaqirilsinmi?")) return;
+            await fetch(`/api/queue/${id}/call`, {method: "POST"});
+            await loadDoctorQueue();
+        }
+
+        async function completeCurrent() {
+            if (!activeAppointmentId) return;
+            await fetch(`/api/queue/${activeAppointmentId}/complete`, {method: "POST"});
+            await loadDoctorQueue();
+        }
+
+        async function skipSpecific(id) {
+            if (!confirm("Bemor kelmadi deb belgilansinmi?")) return;
+            await fetch(`/api/queue/${id}/skip`, {method: "POST"});
+            await loadDoctorQueue();
+        }
+
+        async function recallSpecific(id) {
+            await fetch(`/api/queue/${id}/recall`, {method: "POST"});
+            await loadDoctorQueue();
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

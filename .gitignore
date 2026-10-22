@@ -1,0 +1,50 @@
+venv/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+backups/
+logs/
+data/*.db
+data/*.db-wal
+data/*.db-shm
+.DS_Store
+Thumbs.db
+*.zip
+
+# --- added: repo hygiene ---
+# --- secrets ---
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+# --- python ---
+*.py[cod]
+.venv/
+env/
+.coverage
+htmlcov/
+# --- node ---
+node_modules/
+.next/
+out/
+dist/
+dist-types/
+build/
+*.tsbuildinfo
+# --- godot / android ---
+.godot/
+local.properties
+.gradle/
+*.apk
+*.aab
+# --- runtime data ---
+*.log
+data/*.db-*
+database/*.db
+*.sqlite
+*.sqlite3
+*.pkl
+# --- os ---

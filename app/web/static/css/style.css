@@ -1,0 +1,322 @@
+/* 🏥 Klinika Navbat Tizimi - Telegram WebApp Zamonaviy Dizayni */
+
+:root {
+    --bg-color: var(--tg-theme-bg-color, #f4f6f9);
+    --text-color: var(--tg-theme-text-color, #1a202c);
+    --card-bg: var(--tg-theme-secondary-bg-color, #ffffff);
+    --primary: var(--tg-theme-button-color, #2b6cb0);
+    --primary-hover: #2c5282;
+    --primary-text: var(--tg-theme-button-text-color, #ffffff);
+    --success: #38a169;
+    --warning: #d69e2e;
+    --danger: #e53e3e;
+    --gray-light: #edf2f7;
+    --gray-border: #e2e8f0;
+    --gray-muted: #718096;
+    --radius: 12px;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    padding: 16px;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--gray-border);
+}
+
+.header h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.badge-success { background: #c6f6d5; color: #22543d; }
+.badge-warning { background: #fefcbf; color: #744210; }
+.badge-danger  { background: #fed7d7; color: #742a2a; }
+.badge-info    { background: #bee3f8; color: #2a4365; }
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin-bottom: 20px;
+    padding-bottom: 4px;
+}
+
+.tab-btn {
+    padding: 8px 16px;
+    background: var(--card-bg);
+    border: 1px solid var(--gray-border);
+    border-radius: var(--radius);
+    color: var(--text-color);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+    background: var(--primary);
+    color: var(--primary-text);
+    border-color: var(--primary);
+}
+
+/* Cards */
+.card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid var(--gray-border);
+}
+
+.card-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.stat-box {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--gray-border);
+    box-shadow: var(--shadow);
+    text-align: center;
+}
+
+.stat-num {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--primary);
+    margin-bottom: 4px;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--gray-muted);
+}
+
+/* Queue List */
+.queue-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid var(--gray-border);
+    transition: background 0.15s;
+}
+
+.queue-item:last-child {
+    border-bottom: none;
+}
+
+.queue-num {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--primary);
+    margin-right: 12px;
+    min-width: 45px;
+}
+
+.queue-info {
+    flex: 1;
+}
+
+.queue-name {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 2px;
+}
+
+.queue-meta {
+    font-size: 0.8rem;
+    color: var(--gray-muted);
+}
+
+/* Buttons */
+.btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.btn-primary { background: var(--primary); color: var(--primary-text); }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-warning { background: var(--warning); color: #fff; }
+.btn-danger  { background: var(--danger); color: #fff; }
+.btn-outline { background: transparent; border: 1px solid var(--gray-border); color: var(--text-color); }
+
+.btn-block {
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+    font-size: 1rem;
+}
+
+/* Modals */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow: hidden;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 20px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    /* Uzun modallar (masalan, ish grafigi) oyna ICHIDA lenta kabi scroll bo'ladi —
+       oyna doim ekranga sig'adi, pastdagi "Saqlash" tugmasi yetib boriladi. */
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    /* Scroll paytida sarlavha joyida turadi */
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--card-bg);
+}
+
+.modal-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--gray-muted);
+}
+
+/* Forms */
+.form-group {
+    margin-bottom: 14px;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-color);
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--gray-border);
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-size: 0.95rem;
+    outline: none;
+}
+
+.form-control:focus {
+    border-color: var(--primary);
+}
+
+/* Active Room Banner */
+.active-patient-banner {
+    background: linear-gradient(135deg, #2b6cb0, #2c5282);
+    color: white;
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 15px rgba(43, 108, 176, 0.3);
+}
+
+.active-patient-header {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.85;
+    margin-bottom: 6px;
+}
+
+.active-patient-name {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin-bottom: 10px;
+}
